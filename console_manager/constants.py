@@ -2,9 +2,18 @@ import os
 import sys
 from pathlib import Path
 
-# 配置文件路径（当前目录）
-CONFIG_FILE = Path('.') / 'config.yaml'
-SETTINGS_FILE = Path('.') / 'settings.json'
+# 获取程序所在目录
+def get_app_dir():
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).parent.parent
+
+APP_DIR = get_app_dir()
+
+# 配置文件路径（使用程序所在目录）
+CONFIG_FILE = APP_DIR / 'config.yaml'
+SETTINGS_FILE = APP_DIR / 'settings.json'
 
 # 现代扁平化配色方案
 FLAT_THEME = {

@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 import winshell
 import winreg
-from .constants import FLAT_THEME, CONFIG_FILE, SETTINGS_FILE
+from .constants import FLAT_THEME, CONFIG_FILE, SETTINGS_FILE, APP_DIR
 from .tray_manager import TrayManager
 from .scrolled_notebook import ScrolledNotebook
 from .console_tab import ConsoleTab
@@ -21,7 +21,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('app.log'),
+        logging.FileHandler(APP_DIR / 'app.log'),
         logging.StreamHandler()
     ]
 )
@@ -215,8 +215,8 @@ class ConsoleManager:
     def setup_icon(self):
         """设置窗口图标"""
         icon_paths = [
-            'icon.png',
-            'icon.ico',
+            str(APP_DIR / 'icon.png'),
+            str(APP_DIR / 'icon.ico'),
             str(Path(sys.executable).parent / 'icon.png'),
             str(Path(sys.executable).parent / 'icon.ico')
         ]
@@ -2285,7 +2285,7 @@ class ConsoleManager:
         
         # 图标（如果存在）
         try:
-            icon_img = tk.PhotoImage(file='icon.png')
+            icon_img = tk.PhotoImage(file=str(APP_DIR / 'icon.png'))
             icon_label = tk.Label(dialog, image=icon_img, bg=FLAT_THEME['bg_dark'])
             icon_label.image = icon_img
             icon_label.pack(pady=15)
