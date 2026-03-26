@@ -217,6 +217,8 @@ class ConsoleTab:
                 self.update_status_indicator()
                 self.update_tab_title()
                 self.append_output("进程已停止\n", 'warning')
+                if hasattr(self.app, 'tray_manager') and self.app.tray_manager:
+                    self.app.tray_manager.update_menu()
             except Exception as e:
                 self.append_output(f"无法停止进程: {str(e)}\n", 'error')
     
@@ -267,6 +269,10 @@ class ConsoleTab:
             # 更新状态
             self.update_status_indicator()
             self.update_tab_title()
+            
+            # 更新托盘菜单
+            if hasattr(self.app, 'tray_manager') and self.app.tray_manager:
+                self.app.root.after(0, self.app.tray_manager.update_menu)
             
             # 启动输出读取线程
             threading.Thread(target=self.read_output, daemon=True).start()
@@ -333,3 +339,5 @@ class ConsoleTab:
         self.text_widget.after(0, self.append_output, message, tag)
         self.text_widget.after(0, self.update_status_indicator)
         self.text_widget.after(0, self.update_tab_title)
+        if hasattr(self.app, 'tray_manager') and self.app.tray_manager:
+            self.text_widget.after(0, self.app.tray_manager.update_menu)
