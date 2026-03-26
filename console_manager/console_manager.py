@@ -236,8 +236,8 @@ class ConsoleManager:
     
     def setup_window_events(self):
         """设置窗口事件"""
-        # 窗口关闭事件
-        self.root.protocol('WM_DELETE_WINDOW', self.exit_app)
+        # 窗口关闭事件 - 点叉叉最小化到托盘
+        self.root.protocol('WM_DELETE_WINDOW', self.minimize_to_tray)
         
         # 窗口状态变化事件
         self.root.bind('<Unmap>', self.on_window_unmap)
@@ -256,7 +256,21 @@ class ConsoleManager:
     
     def on_window_unmap(self, event):
         """窗口最小化时"""
-        pass
+        # 检查是否是最小化状态（iconify）
+        if event.widget == self.root:
+            try:
+                # 如果窗口被最小化，则隐藏到托盘
+                if self.root.state() == 'iconic':
+                    self.root.after(100, self._hide_to_tray)
+            except tk.TclError:
+                pass
+    
+    def _hide_to_tray(self):
+        """隐藏窗口到托盘"""
+        try:
+            self.root.withdraw()
+        except tk.TclError:
+            pass
     
     def on_window_map(self, event):
         """窗口恢复时"""
@@ -1417,6 +1431,7 @@ class ConsoleManager:
                 if tab.is_running:
                     tab.stop()
                     self.status_var.set(f"正在停止: {name}")
+                    self.tray_manager.update_menu()
                 else:
                     self.status_var.set(f"{name} 未在运行")
                 break
@@ -1442,6 +1457,7 @@ class ConsoleManager:
                 else:
                     tab.run()
                     self.status_var.set(f"正在启动: {name}")
+                self.tray_manager.update_menu()
                 break
     
     def run_all_consoles(self):
@@ -1451,6 +1467,7 @@ class ConsoleManager:
                 threading.Thread(target=tab.run, daemon=True).start()
         
         self.status_var.set("正在启动所有控制台...")
+        self.tray_manager.update_menu()
     
     def stop_all_consoles(self):
         """停止所有控制台"""
@@ -1459,6 +1476,7 @@ class ConsoleManager:
                 tab.stop()
         
         self.status_var.set("正在停止所有控制台...")
+        self.tray_manager.update_menu()
     
     def refresh_consoles(self):
         """刷新所有控制台"""
@@ -1478,6 +1496,7 @@ class ConsoleManager:
         
         self.status_var.set("已刷新所有控制台")
         self.update_status()
+        self.tray_manager.update_menu()
     
     def filter_consoles(self, event=None):
         """过滤控制台"""
@@ -2133,6 +2152,7 @@ class ConsoleManager:
             
             if result.returncode == 0:
                 self.refresh_services()
+                self.tray_manager.update_menu()
                 self.status_var.set(f"服务启动成功: {service_name}")
             else:
                 error_msg = f"服务启动失败: {result.stderr}"
@@ -2158,6 +2178,7 @@ class ConsoleManager:
             
             if result.returncode == 0:
                 self.refresh_services()
+                self.tray_manager.update_menu()
                 self.status_var.set(f"服务停止成功: {service_name}")
             else:
                 error_msg = f"服务停止失败: {result.stderr}"
@@ -2199,6 +2220,7 @@ class ConsoleManager:
                 # 等待服务完全启动
                 time.sleep(1)
                 self.refresh_services()
+                self.tray_manager.update_menu()
                 self.status_var.set(f"服务重启成功: {service_name}")
             else:
                 error_msg = f"服务重启失败: {start_result.stderr}"

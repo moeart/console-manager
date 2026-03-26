@@ -39,7 +39,26 @@ class TrayManager:
         if icon_image is None:
             icon_image = self.create_default_icon()
         
-        # 创建托盘菜单
+        # 创建动态菜单 - 每次右键显示时调用 get_menu
+        menu = pystray.Menu(self.get_menu)
+        
+        # 创建托盘图标
+        self.tray_icon = pystray.Icon(
+            "console_manager",
+            icon_image,
+            "控制台管理器",
+            menu
+        )
+        
+        # 绑定点击事件
+        self.tray_icon.on_click = self.on_tray_click
+    
+    def get_menu(self, icon=None):
+        """动态获取托盘菜单（每次右键显示时调用）"""
+        # 刷新服务状态
+        if hasattr(self.app, 'refresh_services'):
+            self.app.refresh_services()
+        
         menu_items = []
         
         # 添加显示/隐藏界面选项
@@ -137,19 +156,7 @@ class TrayManager:
         menu_items.append(pystray.Menu.SEPARATOR)
         menu_items.append(pystray.MenuItem('退出', self.exit_app))
         
-        # 创建菜单
-        menu = pystray.Menu(*menu_items)
-        
-        # 创建托盘图标
-        self.tray_icon = pystray.Icon(
-            "console_manager",
-            icon_image,
-            "控制台管理器",
-            menu
-        )
-        
-        # 绑定点击事件
-        self.tray_icon.on_click = self.on_tray_click
+        return menu_items
     
     def create_default_icon(self):
         """创建默认托盘图标"""
