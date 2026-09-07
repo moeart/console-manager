@@ -1,6 +1,7 @@
 """服务管理视图（标准原生控件版）。
 
-固定列宽表格（服务名 / 状态 / 显示名称），顶部操作按钮。
+固定列宽表格（状态图标 / 服务名 / 状态 / 显示名称）。
+启停等操作统一收归主窗口工具栏，本视图只负责展示与选中。
 数据由 ServiceManager 的 services_updated 信号驱动整表重建。
 """
 from __future__ import annotations
@@ -10,9 +11,7 @@ import logging
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
-    QHBoxLayout,
     QHeaderView,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -24,8 +23,8 @@ from .theme import status_color, status_text_zh
 
 logger = logging.getLogger(__name__)
 
-_COLUMNS = ("服务名称", "状态", "显示名称")
-_COL_WIDTHS = (200, 110, 420)
+_COLUMNS = ("", "服务名称", "状态", "显示名称")
+_COL_WIDTHS = (40, 200, 110, 420)
 
 
 class ServiceView(QWidget):
@@ -34,9 +33,7 @@ class ServiceView(QWidget):
     start_requested = pyqtSignal(str)
     stop_requested = pyqtSignal(str)
     restart_requested = pyqtSignal(str)
-    add_requested = pyqtSignal()
     remove_requested = pyqtSignal(str)
-    refresh_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -44,43 +41,6 @@ class ServiceView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(6)
-
-        # ---- 顶部按钮行 ----
-        top = QHBoxLayout()
-        top.setSpacing(8)
-
-        btn_add = QPushButton("添加服务")
-        icons.set_button_icon(btn_add, "add")
-        btn_add.clicked.connect(lambda: self.add_requested.emit())
-        top.addWidget(btn_add)
-
-        btn_start = QPushButton("启动")
-        icons.set_button_icon(btn_start, "play")
-        btn_start.clicked.connect(self._on_start)
-        top.addWidget(btn_start)
-
-        btn_stop = QPushButton("停止")
-        icons.set_button_icon(btn_stop, "stop")
-        btn_stop.clicked.connect(self._on_stop)
-        top.addWidget(btn_stop)
-
-        btn_restart = QPushButton("重启")
-        icons.set_button_icon(btn_restart, "restart")
-        btn_restart.clicked.connect(self._on_restart)
-        top.addWidget(btn_restart)
-
-        btn_remove = QPushButton("移除")
-        btn_remove.clicked.connect(self._on_remove)
-        top.addWidget(btn_remove)
-
-        top.addStretch(1)
-
-        btn_refresh = QPushButton("刷新")
-        icons.set_button_icon(btn_refresh, "refresh")
-        btn_refresh.clicked.connect(lambda: self.refresh_requested.emit())
-        top.addWidget(btn_refresh)
-
-        layout.addLayout(top)
 
         # ---- 服务表格 ----
         self.table = QTableWidget(0, len(_COLUMNS))
@@ -99,6 +59,23 @@ class ServiceView(QWidget):
 
         self.table.doubleClicked.connect(self._on_double_clicked)
         layout.addWidget(self.table, 1)
+
+        # ---- 选中行样式：整行 Windows 高亮蓝 ----
+        # 默认 windows11 样式下选中仅浅灰底+单元格左侧编辑光标竖线，
+        # 观感上"不像选中"。改用 QSS 强制整行蓝底白字，效果直观。
+        self.table.setStyleSheet(
+            """
+            QTableWidget::item:selected {
+                background-color: #0078D4;
+                color: #FFFFFF;
+            }
+            QTableWidget::item {
+                padding: 2px 4px;
+            }
+            """
+        )
+        # 交替行底色保持与原生一致
+        self.table.setAlternatingRowColors(True)
 
         # 内部缓存：行号 -> 服务名 / 状态快照（供双击判断用）
         self._row_names: list[str] = []
@@ -121,26 +98,23 @@ class ServiceView(QWidget):
             row = self.table.rowCount()
             self.table.insertRow(row)
 
-            self.table.setItem(row, 0, QTableWidgetItem(name))
+            # 首列：状态图标（运行=绿色播放 / 停止=红色方块 / 未知=灰色问号）
+            item_icon = QTableWidgetItem()
+            item_icon.setIcon(icons.status_shape_icon(status))
+            item_icon.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_icon.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            self.table.setItem(row, 0, item_icon)
+
+            self.table.setItem(row, 1, QTableWidgetItem(name))
             item_status = QTableWidgetItem(status_text_zh(status))
             item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             # 状态列着色：运行=绿 / 停止=红 / 未知=灰
             item_status.setForeground(QBrush(QColor(status_color(status))))
-            self.table.setItem(row, 1, item_status)
-            self.table.setItem(row, 2, QTableWidgetItem(display))
+            self.table.setItem(row, 2, item_status)
+            self.table.setItem(row, 3, QTableWidgetItem(display))
 
             self._row_names.append(name)
             self._row_status.append(status)
-
-    def refresh_styling(self) -> None:
-        """重刷状态列颜色（保留接口，颜色不随主题变化时也可调用）。"""
-        for row, status in enumerate(self._row_status):
-            item = self.table.item(row, 1)
-            if item is not None:
-                item.setForeground(QBrush(QColor(status_color(status))))
-
-    def refresh_styling(self) -> None:
-        """兼容接口：颜色不随主题变化（保留给既有调用点）。"""
 
     # ------------------------------------------------------------------ #
     #  内部

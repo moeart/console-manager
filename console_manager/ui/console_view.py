@@ -14,7 +14,7 @@ import logging
 import re
 from typing import Any
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -95,14 +95,10 @@ class LogHighlighter(QSyntaxHighlighter):
 
 
 class ConsoleView(QWidget):
-    """单个控制台的内容视图（输出 + 输入行）。"""
+    """单个控制台的内容视图（输出 + 输入行）。
 
-    #: 用户点击"启动"（未运行时）
-    start_requested = pyqtSignal(str)
-    #: 用户点击"停止"（运行中）
-    stop_requested = pyqtSignal(str)
-    #: 用户点击"重启"
-    restart_requested = pyqtSignal(str)
+    启停操作统一由主窗口工具栏承担，本视图只负责输出展示与命令发送。
+    """
 
     def __init__(self, name: str, config: dict[str, Any], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -114,7 +110,7 @@ class ConsoleView(QWidget):
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(6)
 
-        # ---- 顶部信息行 ----
+        # ---- 顶部信息行（状态指示，操作按钮统一收归工具栏）----
         top = QHBoxLayout()
         top.setSpacing(8)
 
@@ -135,21 +131,6 @@ class ConsoleView(QWidget):
 
         self.pid_label = QLabel("")
         top.addWidget(self.pid_label)
-
-        self.btn_start = QPushButton("启动")
-        icons.set_button_icon(self.btn_start, "play")
-        self.btn_start.clicked.connect(lambda: self.start_requested.emit(self._name))
-        top.addWidget(self.btn_start)
-
-        self.btn_stop = QPushButton("停止")
-        icons.set_button_icon(self.btn_stop, "stop")
-        self.btn_stop.clicked.connect(lambda: self.stop_requested.emit(self._name))
-        top.addWidget(self.btn_stop)
-
-        self.btn_restart = QPushButton("重启")
-        icons.set_button_icon(self.btn_restart, "restart")
-        self.btn_restart.clicked.connect(lambda: self.restart_requested.emit(self._name))
-        top.addWidget(self.btn_restart)
 
         layout.addLayout(top)
 
@@ -219,10 +200,6 @@ class ConsoleView(QWidget):
 
         self.state_label.setText(status_text_zh(state) if state != "error" else f"异常退出（{exit_code}）")
         self.pid_label.setText(f"PID {pid}" if running else "")
-
-        self.btn_start.setEnabled(not running)
-        self.btn_stop.setEnabled(running)
-        self.btn_restart.setEnabled(True)
 
     def _on_send(self) -> None:
         """发送命令（通过信号交主窗口转发给 runner）。"""
