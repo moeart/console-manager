@@ -9,7 +9,34 @@ permissions:
   contents: write
 
 jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PyQt6 pywin32 pyyaml
+
+      - name: Build exe
+        run: pyinstaller main.spec --noconfirm
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ConsoleManager-${{ github.ref_name }}
+          path: dist/ConsoleManager.exe
+          if-no-files-found: error
+
   release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,10 +56,17 @@ jobs:
             exit 1
           fi
 
+      - name: Download exe
+        uses: actions/download-artifact@v4
+        with:
+          name: ConsoleManager-${{ github.ref_name }}
+          path: dist
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --title "ConsoleManager $GITHUB_REF_NAME" \
-            --notes-file release_notes.md
+            --notes-file release_notes.md \
+            "dist/ConsoleManager.exe#ConsoleManager-${GITHUB_REF_NAME}.exe"
