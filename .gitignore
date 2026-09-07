@@ -39,3 +39,6 @@ Desktop.ini
 *.dll
 *.so
 *.dylib
+
+# Agent temp
+.temp/
