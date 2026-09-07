@@ -7,7 +7,7 @@
     |--------------------------------------------------|
     | 文件   编辑   视图   设置                          |  ← QMenuBar
     |--------------------------------------------------|
-    | [新建▾] [启动] [停止] [重启] [刷新]   [搜索框…]     |  ← QToolBar
+    | [新建▾] [启动] [停止] [重启] [删除] [刷新]  [搜索框…]  |  ← QToolBar
     |--------------------------------------------------|
     | QTabWidget                                       |
     |  ├─ 服务管理                                      |
@@ -138,9 +138,6 @@ class MainWindow(QMainWindow):
         # ---- 菜单栏 ----
         self._build_menubar()
 
-        # ---- 工具栏 ----
-        self._build_toolbar()
-
         # ---- 标签页 ----
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)  # 贴合主窗口的标签页外观
@@ -157,9 +154,10 @@ class MainWindow(QMainWindow):
         self.service_view.start_requested.connect(self.service_manager.start)
         self.service_view.stop_requested.connect(self.service_manager.stop)
         self.service_view.restart_requested.connect(self.service_manager.restart)
-        self.service_view.add_requested.connect(self.add_service)
         self.service_view.remove_requested.connect(self.remove_service)
-        self.service_view.refresh_requested.connect(self.service_manager.refresh_async)
+
+        # ---- 工具栏（依赖 service_view 存在，放在标签页构建后）----
+        self._build_toolbar()
 
         # ---- 快捷键（Ctrl+N 由菜单动作承载）----
         QShortcut(QKeySequence("Ctrl+K"), self, self.search_edit.setFocus)
@@ -210,35 +208,58 @@ class MainWindow(QMainWindow):
         act_settings.triggered.connect(self.open_settings)
 
     def _build_toolbar(self) -> None:
-        """构建工具栏：新建 / 启动 / 停止 / 重启 / 刷新 + 搜索框。"""
+        """构建工具栏：按钮带图标+文本，按标签页切换功能集。"""
+        from PyQt6.QtWidgets import QSizePolicy
+
         self.toolbar = QToolBar("工具栏")
         self.toolbar.setMovable(False)
-        self.toolbar.setIconSize(self.toolbar.iconSize())
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.addToolBar(self.toolbar)
 
-        self.act_tb_new = self.toolbar.addAction(icons.icon("add"), "新建")
+        # ---- 通用：新建控制台 ----
+        self.act_tb_new = self.toolbar.addAction(icons.icon("new_console"), "新建控制台")
         self.act_tb_new.triggered.connect(self.new_console)
 
         self.toolbar.addSeparator()
 
+        # ---- 控制台页专属 ----
         self.act_tb_start = self.toolbar.addAction(icons.icon("play"), "启动")
         self.act_tb_start.triggered.connect(self._toolbar_start)
 
         self.act_tb_stop = self.toolbar.addAction(icons.icon("stop"), "停止")
         self.act_tb_stop.triggered.connect(self._toolbar_stop)
 
-        self.act_tb_restart = self.toolbar.addAction(icons.icon("restart"), "重启")
+        self.act_tb_restart = self.toolbar.addAction(icons.reboot_icon(), "重启")
         self.act_tb_restart.triggered.connect(self._toolbar_restart)
+
+        self.act_tb_del = self.toolbar.addAction(icons.icon("delete"), "删除控制台")
+        # 用显式封装避免 PyQt6 triggered 的 bool 参数被当作 name 传入 delete_console
+        self.act_tb_del.triggered.connect(self._toolbar_delete_console)
 
         self.toolbar.addSeparator()
 
+        # ---- 服务页专属 ----
+        self.act_tb_add_service = self.toolbar.addAction(icons.icon("add_service"), "添加服务")
+        self.act_tb_add_service.triggered.connect(self.add_service)
+
+        self.act_tb_svc_start = self.toolbar.addAction(icons.icon("play"), "启动服务")
+        self.act_tb_svc_start.triggered.connect(self.service_view._on_start)
+
+        self.act_tb_svc_stop = self.toolbar.addAction(icons.icon("stop"), "停止服务")
+        self.act_tb_svc_stop.triggered.connect(self.service_view._on_stop)
+
+        self.act_tb_svc_restart = self.toolbar.addAction(icons.reboot_icon(), "重启服务")
+        self.act_tb_svc_restart.triggered.connect(self.service_view._on_restart)
+
+        self.act_tb_svc_remove = self.toolbar.addAction(icons.icon("remove"), "移除服务")
+        self.act_tb_svc_remove.triggered.connect(self.service_view._on_remove)
+
+        # ---- 通用：刷新 ----
         self.act_tb_refresh = self.toolbar.addAction(icons.icon("refresh"), "刷新")
         self.act_tb_refresh.setShortcut("F5")
         self.act_tb_refresh.triggered.connect(self.refresh_all)
 
         # 搜索框放工具栏右侧
-        from PyQt6.QtWidgets import QSizePolicy
-
         spacer_widget = QWidget()
         lay = QHBoxLayout(spacer_widget)
         lay.setContentsMargins(8, 0, 0, 0)
@@ -253,6 +274,31 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.search_edit)
         self.toolbar.addWidget(spacer_widget)
 
+        # 标签页切换时刷新工具栏按钮可见性
+        self.tabs.currentChanged.connect(self._update_toolbar_for_tab)
+        self._update_toolbar_for_tab(self.tabs.currentIndex())
+
+    def _update_toolbar_for_tab(self, _index: int) -> None:
+        """按当前标签页切换工具栏按钮：服务页显示服务操作，控制台页显示控制台操作。"""
+        is_service_tab = self._current_console_name() is None
+
+        for act in (
+            self.act_tb_start,
+            self.act_tb_stop,
+            self.act_tb_restart,
+            self.act_tb_del,
+        ):
+            act.setVisible(not is_service_tab)
+
+        for act in (
+            self.act_tb_add_service,
+            self.act_tb_svc_start,
+            self.act_tb_svc_stop,
+            self.act_tb_svc_restart,
+            self.act_tb_svc_remove,
+        ):
+            act.setVisible(is_service_tab)
+
     # ------------------------------------------------------------------ #
     #  控制台视图管理
     # ------------------------------------------------------------------ #
@@ -264,9 +310,6 @@ class MainWindow(QMainWindow):
             return view
 
         view = ConsoleView(name, self._consoles.get(name, {}), self)
-        view.start_requested.connect(self.process_manager.start_console)
-        view.stop_requested.connect(self.process_manager.stop_console)
-        view.restart_requested.connect(self.process_manager.restart_console)
         # 输入行直连 runner.send_command
         runner = self.process_manager.get(name)
         if runner is not None:
@@ -344,6 +387,14 @@ class MainWindow(QMainWindow):
             self.process_manager.restart_console(name)
         else:
             self.statusBar().showMessage("请先选择一个控制台标签页", 3000)
+
+    def _toolbar_delete_console(self) -> None:
+        """工具栏"删除控制台"：确认后删除当前控制台标签页。"""
+        name = self._current_console_name()
+        if not name:
+            self.statusBar().showMessage("请先选择一个控制台标签页", 3000)
+            return
+        self.delete_console(name)
 
     def _filter_tabs(self, text: str) -> None:
         """按名称过滤控制台标签页。"""
